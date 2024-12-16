@@ -1,0 +1,32 @@
+#!/bin/bash
+
+echo -e "#!/bin/bash\n\n# Count files (excluding directories and symlinks) in /etc directory\nfind /etc -type f | wc -l" > count_files.sh
+chmod +x count_files.sh
+
+# Assuming you have already cloned a repository
+cd my_repo
+git add count_files.sh
+git commit -m "Add script to count files in /etc excluding directories and symlinks"
+git push origin main
+
+mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,TMP}
+cp count_files.sh ~/rpmbuild/SOURCES
+echo -e "Name: count_files\nVersion: 1.0\nRelease: 1%{?dist}\nSummary: Count files excluding directories and symlinks in /etc\nLicense: GPL\nSource0: %{name}-%{version}.tar.gz\n%description\nThis is a utility to count files excluding directories and symlinks in /etc.\n%prep\n%setup -q\n%build\n%install\ninstall -m 755 %{SOURCE0} %{buildroot}/usr/bin/count_files\n%files\n/usr/bin/count_files" > ~/rpmbuild/SPECS/count_files.spec
+cd ~/rpmbuild/SPECS
+rpmbuild -ba count_files.spec
+# RPM package created in ~/rpmbuild/RPMS/x86_64/count_files-1.0-1.x86_64.rpm
+
+mkdir -p ~/debbuild/DEBIAN
+mkdir -p ~/debbuild/usr/bin
+cp count_files.sh ~/debbuild/usr/bin/count_files
+echo -e "Package: count-files\nVersion: 1.0\nArchitecture: amd64\nMaintainer: You <daniilshvediuk@gmail.com>\nDescription: Count files excluding directories and symlinks in /etc\n" > ~/debbuild/DEBIAN/control
+dpkg-deb --build ~/debbuild count-files_1.0_amd64.deb
+# DEB package created: count-files_1.0_amd64.deb
+
+echo -e "name: Build RPM and DEB\n\non:\n  push:\n    branches:\n      - main\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n    - name: Checkout code\n      uses: actions/checkout@v2\n    - name: Set up Java for Jenkins\n      uses: actions/setup-java@v2\n      with:\n        java-version: '11'\n    - name: Install dependencies for RPM and DEB\n      run: |\n        sudo apt-get update\n        sudo apt-get install -y rpm dpkg-dev\n    - name: Build RPM\n      run: rpmbuild -ba rpmbuild/SPECS/count_files.spec\n    - name: Build DEB\n      run: dpkg-deb --build debbuild count-files_1.0_amd64.deb\n" > .github/workflows/build.yml
+
+echo -e "FROM jenkins/jenkins:lts\nUSER root\nRUN apt-get update && apt-get install -y rpm dpkg-dev git\nUSER jenkins" > Dockerfile
+
+echo -e "pipeline {\n    agent any\n    stages {\n        stage('Build RPM and DEB') {\n            steps {\n                sh 'git clone https://github.com/yourusername/my_repo.git'\n                sh 'rpmbuild -ba rpmbuild/SPECS/count_files.spec'\n                sh 'dpkg-deb --build debbuild count-files_1.0_amd64.deb'\n            }\n        }\n        stage('Install RPM or DEB') {\n            steps {\n                sh 'sudo dpkg -i count-files_1.0_amd64.deb'  # For DEB\n                # sh 'sudo rpm -ivh count_files-1.0-1.x86_64.rpm' # For RPM\n            }\n        }\n        stage('Run the script') {\n            steps {\n                sh '/usr/bin/count_files'\n            }\n        }\n    }\n}" > Jenkinsfile
+
+# Done!
